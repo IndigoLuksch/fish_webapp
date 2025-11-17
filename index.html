@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish Card Game 🐟</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: white; text-align: center; margin-bottom: 30px; font-size: 2.5em; }
+        .game-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .setup-form input, .setup-form button, select {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+        }
+        button:hover { background: #5a67d8; transform: translateY(-2px); }
+        .team-display {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .team {
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid;
+        }
+        .team1 { background: #fee2e2; border-color: #ef4444; }
+        .team2 { background: #dbeafe; border-color: #3b82f6; }
+        .card {
+            display: inline-block;
+            padding: 8px 12px;
+            margin: 4px;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .red-card { color: #ef4444; }
+        .black-card { color: #1f2937; }
+        .game-log {
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+        .controls { display: flex; gap: 10px; margin: 15px 0; }
+        .controls button, .controls select { flex: 1; }
+        .game-code {
+            background: #fef3c7;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin: 15px 0;
+        }
+        .player-list { margin: 15px 0; }
+        .player-item {
+            padding: 8px;
+            background: #f3f4f6;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+        .current-turn {
+            background: #fef3c7;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .claimed-suits {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .suit-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            margin: 2px;
+            font-size: 12px;
+        }
+        #gameArea { display: none; }
+        .hand-display { margin: 20px 0; }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐟 Fish Card Game</h1>
+        
+        <div id="setupArea">
+            <div class="game-panel setup-form">
+                <h2>Start or Join Game</h2>
+                <input type="text" id="playerName" placeholder="Your name">
+                <button onclick="createGame()">Create New Game</button>
+                <div style="margin: 20px 0;">OR</div>
+                <input type="text" id="joinCode" placeholder="Game code">
+                <button onclick="joinGame()">Join Game</button>
+            </div>
+            
+            <div id="lobbyArea" style="display:none;" class="game-panel">
+                <h2>Game Lobby</h2>
+                <div class="game-code" id="gameCodeDisplay"></div>
+                <button onclick="copyGameCode()">Copy Code</button>
+                
+                <div class="player-list">
+                    <h3>Players:</h3>
+                    <div id="playersList"></div>
+                </div>
+                
+                <div id="hostControls" style="display:none;">
+                    <button onclick="assignTeams(false)">Assign Teams (Alternating)</button>
+                    <button onclick="assignTeams(true)">Randomize Teams</button>
+                </div>
+                
+                <div class="team-display" id="teamsDisplay" style="display:none;">
+                    <div class="team team1">
+                        <h3>Team 1</h3>
+                        <div id="team1List"></div>
+                    </div>
+                    <div class="team team2">
+                        <h3>Team 2</h3>
+                        <div id="team2List"></div>
+                    </div>
+                </div>
+                
+                <button id="startGameBtn" style="display:none;" onclick="startGame()">Start Game</button>
+            </div>
+        </div>
+        
+        <div id="gameArea">
+            <div class="game-panel">
+                <div class="status-bar">
+                    <span>Team 1: <span id="team1Score">0</span> suits</span>
+                    <span>Team 2: <span id="team2Score">0</span> suits</span>
+                </div>
+                
+                <div class="current-turn" id="currentTurn"></div>
+                
+                <div class="controls" id="gameControls" style="display:none;">
+                    <select id="targetPlayer">
+                        <option value="">Select player to ask</option>
+                    </select>
+                    <select id="cardToAsk">
+                        <option value="">Select card</option>
+                    </select>
+                    <button onclick="askForCard()">Ask for Card</button>
+                    <button onclick="startClaim()">Make Claim</button>
+                </div>
+                
+                <div id="claimArea" style="display:none;" class="game-panel">
+                    <h3>Making a Claim</h3>
+                    <select id="claimSuit">
+                        <option value="">Select half suit</option>
+                    </select>
+                    <div id="claimAssignments"></div>
+                    <button onclick="submitClaim()">Submit Claim</button>
+                    <button onclick="cancelClaim()">Cancel</button>
+                </div>
+                
+                <div class="hand-display">
+                    <h3>Your Hand</h3>
+                    <div id="playerHand"></div>
+                </div>
+                
+                <div class="claimed-suits">
+                    <div class="team1">
+                        <h4>Team 1 Suits</h4>
+                        <div id="team1Suits"></div>
+                    </div>
+                    <div class="team2">
+                        <h4>Team 2 Suits</h4>
+                        <div id="team2Suits"></div>
+                    </div>
+                </div>
+                
+                <div class="game-log">
+                    <h3>Game Log</h3>
+                    <div id="gameLog"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Game state
+        let gameState = {
+            code: '',
+            players: [],
+            currentPlayer: '',
+            teams: { team1: [], team2: [] },
+            hands: {},
+            currentTurn: 0,
+            claimedSuits: { team1: [], team2: [] },
+            isHost: false
+        };
+        
+        // Half suits definition
+        const halfSuits = {
+            'low-hearts': ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'],
+            'high-hearts': ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'],
+            'low-diamonds': ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'],
+            'high-diamonds': ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'],
+            'low-clubs': ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'],
+            'high-clubs': ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'],
+            'low-spades': ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'],
+            'high-spades': ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠']
+        };
+        
+        function createGame() {
+            const name = document.getElementById('playerName').value;
+            if (!name) { alert('Enter your name'); return; }
+            
+            gameState.code = Math.random().toString(36).substring(2, 8).toUpperCase();
+            gameState.currentPlayer = name;
+            gameState.players = [name];
+            gameState.isHost = true;
+            
+            showLobby();
+            updateLobby();
+        }
+        
+        function joinGame() {
+            const name = document.getElementById('playerName').value;
+            const code = document.getElementById('joinCode').value;
+            if (!name || !code) { alert('Enter name and code'); return; }
+            
+            gameState.code = code;
+            gameState.currentPlayer = name;
+            gameState.players.push(name);
+            
+            showLobby();
+            updateLobby();
+            addLog(`${name} joined the game`);
+        }
+        
+        function showLobby() {
+            document.getElementById('setupArea').style.display = 'block';
+            document.getElementById('lobbyArea').style.display = 'block';
+            document.getElementById('gameArea').style.display = 'none';
+        }
+        
+        function updateLobby() {
+            document.getElementById('gameCodeDisplay').textContent = gameState.code;
+            document.getElementById('playersList').innerHTML = gameState.players.map(p => 
+                `<div class="player-item">${p} ${p === gameState.currentPlayer ? '(You)' : ''}</div>`
+            ).join('');
+            
+            if (gameState.isHost) {
+                document.getElementById('hostControls').style.display = 'block';
+            }
+            
+            if (gameState.teams.team1.length > 0) {
+                document.getElementById('teamsDisplay').style.display = 'grid';
+                document.getElementById('team1List').innerHTML = gameState.teams.team1.join(', ');
+                document.getElementById('team2List').innerHTML = gameState.teams.team2.join(', ');
+                
+                if (gameState.isHost) {
+                    document.getElementById('startGameBtn').style.display = 'block';
+                }
+            }
+        }
+        
+        function copyGameCode() {
+            navigator.clipboard.writeText(gameState.code);
+            alert('Code copied!');
+        }
+        
+        function assignTeams(random) {
+            if (gameState.players.length < 4) {
+                alert('Need at least 4 players');
+                return;
+            }
+            
+            let players = [...gameState.players];
+            if (random) {
+                players.sort(() => Math.random() - 0.5);
+            }
+            
+            gameState.teams.team1 = players.filter((_, i) => i % 2 === 0);
+            gameState.teams.team2 = players.filter((_, i) => i % 2 === 1);
+            
+            updateLobby();
+            addLog('Teams assigned');
+        }
+        
+        function startGame() {
+            // Create and shuffle deck
+            const deck = [];
+            Object.values(halfSuits).forEach(suit => deck.push(...suit));
+            deck.sort(() => Math.random() - 0.5);
+            
+            // Deal cards
+            const cardsPerPlayer = Math.floor(deck.length / gameState.players.length);
+            gameState.players.forEach((player, i) => {
+                gameState.hands[player] = deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer);
+            });
+            
+            gameState.currentTurn = 0;
+            
+            document.getElementById('setupArea').style.display = 'none';
+            document.getElementById('gameArea').style.display = 'block';
+            
+            updateGameDisplay();
+            addLog('Game started!');
+        }
+        
+        function updateGameDisplay() {
+            const currentPlayerName = gameState.players[gameState.currentTurn];
+            document.getElementById('currentTurn').textContent = `Current Turn: ${currentPlayerName}`;
+            
+            // Show controls only if it's your turn
+            if (currentPlayerName === gameState.currentPlayer) {
+                document.getElementById('gameControls').style.display = 'flex';
+                updateAskOptions();
+            } else {
+                document.getElementById('gameControls').style.display = 'none';
+            }
+            
+            // Update hand
+            const hand = gameState.hands[gameState.currentPlayer] || [];
+            document.getElementById('playerHand').innerHTML = hand.sort().map(card => {
+                const isRed = card.includes('♥') || card.includes('♦');
+                return `<span class="card ${isRed ? 'red-card' : 'black-card'}">${card}</span>`;
+            }).join('');
+            
+            // Update scores
+            document.getElementById('team1Score').textContent = gameState.claimedSuits.team1.length;
+            document.getElementById('team2Score').textContent = gameState.claimedSuits.team2.length;
+            
+            // Update claimed suits
+            document.getElementById('team1Suits').innerHTML = gameState.claimedSuits.team1
+                .map(s => `<span class="suit-badge">${s}</span>`).join('');
+            document.getElementById('team2Suits').innerHTML = gameState.claimedSuits.team2
+                .map(s => `<span class="suit-badge">${s}</span>`).join('');
+        }
+        
+        function updateAskOptions() {
+            const currentPlayerName = gameState.players[gameState.currentTurn];
+            const currentTeam = gameState.teams.team1.includes(currentPlayerName) ? 'team1' : 'team2';
+            const oppositeTeam = currentTeam === 'team1' ? 'team2' : 'team1';
+            
+            // Update target players
+            const targetSelect = document.getElementById('targetPlayer');
+            targetSelect.innerHTML = '<option value="">Select player</option>' + 
+                gameState.teams[oppositeTeam].map(p => 
+                    `<option value="${p}">${p} (${gameState.hands[p]?.length || 0} cards)</option>`
+                ).join('');
+            
+            // Update askable cards
+            const myHand = gameState.hands[currentPlayerName] || [];
+            const askableCards = new Set();
+            
+            myHand.forEach(card => {
+                const halfSuit = Object.entries(halfSuits).find(([_, cards]) => cards.includes(card))?.[0];
+                if (halfSuit) {
+                    halfSuits[halfSuit].forEach(c => {
+                        if (!myHand.includes(c)) askableCards.add(c);
+                    });
+                }
+            });
+            
+            const cardSelect = document.getElementById('cardToAsk');
+            cardSelect.innerHTML = '<option value="">Select card</option>' + 
+                Array.from(askableCards).sort().map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+        
+        function askForCard() {
+            const target = document.getElementById('targetPlayer').value;
+            const card = document.getElementById('cardToAsk').value;
+            
+            if (!target || !card) {
+                alert('Select player and card');
+                return;
+            }
+            
+            const asker = gameState.players[gameState.currentTurn];
+            
+            if (gameState.hands[target].includes(card)) {
+                // Transfer card
+                gameState.hands[target] = gameState.hands[target].filter(c => c !== card);
+                gameState.hands[asker].push(card);
+                addLog(`${asker} asked ${target} for ${card} - YES!`);
+                // Same player continues
+            } else {
+                addLog(`${asker} asked ${target} for ${card} - NO`);
+                // Turn passes to target
+                gameState.currentTurn = gameState.players.indexOf(target);
+            }
+            
+            updateGameDisplay();
+        }
+        
+        function startClaim() {
+            document.getElementById('gameControls').style.display = 'none';
+            document.getElementById('claimArea').style.display = 'block';
+            
+            // Update claim suit options
+            const claimSelect = document.getElementById('claimSuit');
+            const unclaimed = Object.keys(halfSuits).filter(s => 
+                !gameState.claimedSuits.team1.includes(s) && 
+                !gameState.claimedSuits.team2.includes(s)
+            );
+            
+            claimSelect.innerHTML = '<option value="">Select half suit</option>' + 
+                unclaimed.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+        
+        function cancelClaim() {
+            document.getElementById('claimArea').style.display = 'none';
+            document.getElementById('gameControls').style.display = 'flex';
+        }
+        
+        function submitClaim() {
+            // Simplified claim logic - in real game would validate assignments
+            const suit = document.getElementById('claimSuit').value;
+            if (!suit) { alert('Select a suit'); return; }
+            
+            const claimer = gameState.players[gameState.currentTurn];
+            const team = gameState.teams.team1.includes(claimer) ? 'team1' : 'team2';
+            
+            gameState.claimedSuits[team].push(suit);
+            addLog(`${claimer} claimed ${suit} for ${team}`);
+            
+            // Check for game end
+            const totalClaimed = gameState.claimedSuits.team1.length + gameState.claimedSuits.team2.length;
+            if (totalClaimed >= 8) {
+                endGame();
+                return;
+            }
+            
+            gameState.currentTurn = (gameState.currentTurn + 1) % gameState.players.length;
+            cancelClaim();
+            updateGameDisplay();
+        }
+        
+        function endGame() {
+            const t1Score = gameState.claimedSuits.team1.length;
+            const t2Score = gameState.claimedSuits.team2.length;
+            const winner = t1Score > t2Score ? 'Team 1' : t2Score > t1Score ? 'Team 2' : 'Tie';
+            
+            alert(`Game Over! ${winner} wins! (${t1Score} - ${t2Score})`);
+            addLog(`Game ended. ${winner} wins!`);
+        }
+        
+        function addLog(message) {
+            const log = document.getElementById('gameLog');
+            const time = new Date().toLocaleTimeString();
+            log.innerHTML = `<div class="log-entry">${time} - ${message}</div>` + log.innerHTML;
+        }
+    </script>
+</body>
+</html>
