@@ -283,8 +283,9 @@
     
     <script>
         // Configuration
-        const WORKER_URL = 'https://your-worker.your-subdomain.workers.dev'; // Replace with your Worker URL
-        const USE_MULTIPLAYER = false; // Set to true when Worker is deployed
+        // Use window.location.host to automatically detect the Cloudflare URL
+        const WORKER_URL = 'https://' + window.location.host; 
+        const USE_MULTIPLAYER = true; // MUST be true to hit the backend
         
         // Game state
         let gameState = {
