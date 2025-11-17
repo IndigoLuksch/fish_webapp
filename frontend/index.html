@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fish Card Game 🐟</title>
+    <title>Fish Card Game 🐟 - Multiplayer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -37,6 +37,11 @@
             border: none;
         }
         button:hover { background: #5a67d8; transform: translateY(-2px); }
+        button:disabled { 
+            background: #9ca3af; 
+            cursor: not-allowed; 
+            transform: none;
+        }
         .team-display {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -93,6 +98,17 @@
             background: #f3f4f6;
             border-radius: 5px;
             margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .online-indicator {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 8px;
         }
         .current-turn {
             background: #fef3c7;
@@ -125,35 +141,69 @@
             border-radius: 8px;
             margin-bottom: 15px;
         }
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+        .connected { background: #10b981; color: white; }
+        .disconnected { background: #ef4444; color: white; }
+        .connecting { background: #f59e0b; color: white; }
+        .info-box {
+            background: #eff6ff;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .error-message {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            color: #dc2626;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
+    <div class="connection-status disconnected" id="connectionStatus">Offline Mode</div>
+    
     <div class="container">
-        <h1>🐟 Fish Card Game</h1>
+        <h1>🐟 Fish Card Game - Multiplayer</h1>
         
         <div id="setupArea">
             <div class="game-panel setup-form">
                 <h2>Start or Join Game</h2>
-                <input type="text" id="playerName" placeholder="Your name">
+                <input type="text" id="playerName" placeholder="Your name" maxlength="20">
                 <button onclick="createGame()">Create New Game</button>
                 <div style="margin: 20px 0;">OR</div>
-                <input type="text" id="joinCode" placeholder="Game code">
+                <input type="text" id="joinCode" placeholder="Game code" maxlength="6" style="text-transform: uppercase;">
                 <button onclick="joinGame()">Join Game</button>
+                
+                <div class="info-box">
+                    <strong>Note:</strong> This is a local demo version. For true multiplayer, deploy with the Cloudflare Worker backend (instructions included).
+                </div>
             </div>
             
             <div id="lobbyArea" style="display:none;" class="game-panel">
                 <h2>Game Lobby</h2>
                 <div class="game-code" id="gameCodeDisplay"></div>
-                <button onclick="copyGameCode()">Copy Code</button>
+                <button onclick="copyGameCode()">📋 Copy Code</button>
                 
                 <div class="player-list">
-                    <h3>Players:</h3>
+                    <h3>Players (<span id="playerCount">0</span>/12):</h3>
                     <div id="playersList"></div>
                 </div>
                 
                 <div id="hostControls" style="display:none;">
-                    <button onclick="assignTeams(false)">Assign Teams (Alternating)</button>
-                    <button onclick="assignTeams(true)">Randomize Teams</button>
+                    <button onclick="assignTeams(false)" id="alternateTeamsBtn">Assign Teams (Alternating)</button>
+                    <button onclick="assignTeams(true)" id="randomTeamsBtn">Randomize Teams</button>
                 </div>
                 
                 <div class="team-display" id="teamsDisplay" style="display:none;">
@@ -167,7 +217,7 @@
                     </div>
                 </div>
                 
-                <button id="startGameBtn" style="display:none;" onclick="startGame()">Start Game</button>
+                <button id="startGameBtn" style="display:none;" onclick="startGame()">🎮 Start Game</button>
             </div>
         </div>
         
@@ -175,6 +225,7 @@
             <div class="game-panel">
                 <div class="status-bar">
                     <span>Team 1: <span id="team1Score">0</span> suits</span>
+                    <span id="turnTimer"></span>
                     <span>Team 2: <span id="team2Score">0</span> suits</span>
                 </div>
                 
@@ -187,23 +238,28 @@
                     <select id="cardToAsk">
                         <option value="">Select card</option>
                     </select>
-                    <button onclick="askForCard()">Ask for Card</button>
-                    <button onclick="startClaim()">Make Claim</button>
+                    <button onclick="askForCard()" id="askBtn">Ask for Card</button>
+                    <button onclick="startClaim()" id="claimBtn">Make Claim</button>
                 </div>
                 
                 <div id="claimArea" style="display:none;" class="game-panel">
                     <h3>Making a Claim</h3>
-                    <select id="claimSuit">
+                    <select id="claimSuit" onchange="updateClaimForm()">
                         <option value="">Select half suit</option>
                     </select>
                     <div id="claimAssignments"></div>
-                    <button onclick="submitClaim()">Submit Claim</button>
+                    <button onclick="submitClaim()" id="submitClaimBtn">Submit Claim</button>
                     <button onclick="cancelClaim()">Cancel</button>
                 </div>
                 
                 <div class="hand-display">
-                    <h3>Your Hand</h3>
+                    <h3>Your Hand (<span id="handCount">0</span> cards)</h3>
                     <div id="playerHand"></div>
+                </div>
+                
+                <div class="game-panel">
+                    <h3>All Players</h3>
+                    <div id="allPlayersDisplay"></div>
                 </div>
                 
                 <div class="claimed-suits">
@@ -226,6 +282,10 @@
     </div>
     
     <script>
+        // Configuration
+        const WORKER_URL = 'https://your-worker.your-subdomain.workers.dev'; // Replace with your Worker URL
+        const USE_MULTIPLAYER = false; // Set to true when Worker is deployed
+        
         // Game state
         let gameState = {
             code: '',
@@ -235,7 +295,9 @@
             hands: {},
             currentTurn: 0,
             claimedSuits: { team1: [], team2: [] },
-            isHost: false
+            isHost: false,
+            gameStarted: false,
+            onlinePlayers: new Set()
         };
         
         // Half suits definition
@@ -250,31 +312,153 @@
             'high-spades': ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠']
         };
         
+        let ws = null;
+        let reconnectTimeout = null;
+        
+        // WebSocket connection for multiplayer
+        function connectWebSocket() {
+            if (!USE_MULTIPLAYER) return;
+            
+            updateConnectionStatus('connecting');
+            
+            ws = new WebSocket(WORKER_URL.replace('https://', 'wss://'));
+            
+            ws.onopen = () => {
+                updateConnectionStatus('connected');
+                if (gameState.code && gameState.currentPlayer) {
+                    sendMessage({
+                        type: 'rejoin',
+                        gameCode: gameState.code,
+                        playerName: gameState.currentPlayer
+                    });
+                }
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleServerMessage(data);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateConnectionStatus('disconnected');
+            };
+            
+            ws.onclose = () => {
+                updateConnectionStatus('disconnected');
+                // Reconnect after 3 seconds
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = setTimeout(connectWebSocket, 3000);
+            };
+        }
+        
+        function sendMessage(data) {
+            if (USE_MULTIPLAYER && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(data));
+            }
+        }
+        
+        function updateConnectionStatus(status) {
+            const elem = document.getElementById('connectionStatus');
+            elem.className = 'connection-status ' + status;
+            elem.textContent = status === 'connected' ? 'Online' : 
+                              status === 'connecting' ? 'Connecting...' : 
+                              'Offline Mode';
+        }
+        
+        function handleServerMessage(data) {
+            switch(data.type) {
+                case 'gameCreated':
+                    gameState.code = data.gameCode;
+                    gameState.isHost = true;
+                    showLobby();
+                    updateLobby();
+                    break;
+                    
+                case 'playerJoined':
+                    gameState.players = data.players;
+                    updateLobby();
+                    addLog(`${data.playerName} joined the game`);
+                    break;
+                    
+                case 'teamsAssigned':
+                    gameState.teams = data.teams;
+                    updateLobby();
+                    addLog('Teams have been assigned');
+                    break;
+                    
+                case 'gameStarted':
+                    gameState = { ...gameState, ...data.gameState };
+                    document.getElementById('setupArea').style.display = 'none';
+                    document.getElementById('gameArea').style.display = 'block';
+                    updateGameDisplay();
+                    addLog('Game started!');
+                    break;
+                    
+                case 'turnUpdate':
+                    gameState = { ...gameState, ...data.gameState };
+                    updateGameDisplay();
+                    if (data.log) addLog(data.log);
+                    break;
+                    
+                case 'gameEnded':
+                    handleGameEnd(data);
+                    break;
+                    
+                case 'error':
+                    alert('Error: ' + data.message);
+                    break;
+            }
+        }
+        
         function createGame() {
-            const name = document.getElementById('playerName').value;
+            const name = document.getElementById('playerName').value.trim();
             if (!name) { alert('Enter your name'); return; }
             
-            gameState.code = Math.random().toString(36).substring(2, 8).toUpperCase();
-            gameState.currentPlayer = name;
-            gameState.players = [name];
-            gameState.isHost = true;
-            
-            showLobby();
-            updateLobby();
+            if (USE_MULTIPLAYER) {
+                sendMessage({
+                    type: 'createGame',
+                    playerName: name
+                });
+            } else {
+                // Local mode
+                gameState.code = Math.random().toString(36).substring(2, 8).toUpperCase();
+                gameState.currentPlayer = name;
+                gameState.players = [name];
+                gameState.isHost = true;
+                
+                showLobby();
+                updateLobby();
+            }
         }
         
         function joinGame() {
-            const name = document.getElementById('playerName').value;
-            const code = document.getElementById('joinCode').value;
-            if (!name || !code) { alert('Enter name and code'); return; }
+            const name = document.getElementById('playerName').value.trim();
+            const code = document.getElementById('joinCode').value.trim().toUpperCase();
             
-            gameState.code = code;
-            gameState.currentPlayer = name;
-            gameState.players.push(name);
+            if (!name || !code) { alert('Enter name and game code'); return; }
             
-            showLobby();
-            updateLobby();
-            addLog(`${name} joined the game`);
+            if (USE_MULTIPLAYER) {
+                sendMessage({
+                    type: 'joinGame',
+                    playerName: name,
+                    gameCode: code
+                });
+            } else {
+                // Local mode
+                if (gameState.players.includes(name)) {
+                    alert('Name already taken!');
+                    return;
+                }
+                
+                gameState.code = code;
+                gameState.currentPlayer = name;
+                gameState.players.push(name);
+                
+                showLobby();
+                updateLobby();
+                addLog(`${name} joined the game`);
+            }
         }
         
         function showLobby() {
@@ -285,14 +469,26 @@
         
         function updateLobby() {
             document.getElementById('gameCodeDisplay').textContent = gameState.code;
-            document.getElementById('playersList').innerHTML = gameState.players.map(p => 
-                `<div class="player-item">${p} ${p === gameState.currentPlayer ? '(You)' : ''}</div>`
-            ).join('');
+            document.getElementById('playerCount').textContent = gameState.players.length;
             
+            document.getElementById('playersList').innerHTML = gameState.players.map(p => `
+                <div class="player-item">
+                    <span>${p} ${p === gameState.currentPlayer ? '(You)' : ''}</span>
+                    ${gameState.onlinePlayers.has(p) ? '<span class="online-indicator"></span>' : ''}
+                </div>
+            `).join('');
+            
+            // Show host controls
             if (gameState.isHost) {
                 document.getElementById('hostControls').style.display = 'block';
+                
+                // Enable/disable team buttons based on player count
+                const canAssign = gameState.players.length >= 4 && gameState.players.length <= 12;
+                document.getElementById('alternateTeamsBtn').disabled = !canAssign;
+                document.getElementById('randomTeamsBtn').disabled = !canAssign;
             }
             
+            // Show teams if assigned
             if (gameState.teams.team1.length > 0) {
                 document.getElementById('teamsDisplay').style.display = 'grid';
                 document.getElementById('team1List').innerHTML = gameState.teams.team1.join(', ');
@@ -305,8 +501,11 @@
         }
         
         function copyGameCode() {
-            navigator.clipboard.writeText(gameState.code);
-            alert('Code copied!');
+            navigator.clipboard.writeText(gameState.code).then(() => {
+                const btn = event.target;
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => btn.textContent = '📋 Copy Code', 2000);
+            });
         }
         
         function assignTeams(random) {
@@ -314,38 +513,59 @@
                 alert('Need at least 4 players');
                 return;
             }
-            
-            let players = [...gameState.players];
-            if (random) {
-                players.sort(() => Math.random() - 0.5);
+            if (gameState.players.length > 12) {
+                alert('Maximum 12 players allowed');
+                return;
             }
             
-            gameState.teams.team1 = players.filter((_, i) => i % 2 === 0);
-            gameState.teams.team2 = players.filter((_, i) => i % 2 === 1);
-            
-            updateLobby();
-            addLog('Teams assigned');
+            if (USE_MULTIPLAYER) {
+                sendMessage({
+                    type: 'assignTeams',
+                    gameCode: gameState.code,
+                    random: random
+                });
+            } else {
+                // Local mode
+                let players = [...gameState.players];
+                if (random) {
+                    players.sort(() => Math.random() - 0.5);
+                }
+                
+                gameState.teams.team1 = players.filter((_, i) => i % 2 === 0);
+                gameState.teams.team2 = players.filter((_, i) => i % 2 === 1);
+                
+                updateLobby();
+                addLog('Teams assigned');
+            }
         }
         
         function startGame() {
-            // Create and shuffle deck
-            const deck = [];
-            Object.values(halfSuits).forEach(suit => deck.push(...suit));
-            deck.sort(() => Math.random() - 0.5);
-            
-            // Deal cards
-            const cardsPerPlayer = Math.floor(deck.length / gameState.players.length);
-            gameState.players.forEach((player, i) => {
-                gameState.hands[player] = deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer);
-            });
-            
-            gameState.currentTurn = 0;
-            
-            document.getElementById('setupArea').style.display = 'none';
-            document.getElementById('gameArea').style.display = 'block';
-            
-            updateGameDisplay();
-            addLog('Game started!');
+            if (USE_MULTIPLAYER) {
+                sendMessage({
+                    type: 'startGame',
+                    gameCode: gameState.code
+                });
+            } else {
+                // Local mode - create and shuffle deck
+                const deck = [];
+                Object.values(halfSuits).forEach(suit => deck.push(...suit));
+                deck.sort(() => Math.random() - 0.5);
+                
+                // Deal cards
+                const cardsPerPlayer = Math.floor(deck.length / gameState.players.length);
+                gameState.players.forEach((player, i) => {
+                    gameState.hands[player] = deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer);
+                });
+                
+                gameState.currentTurn = 0;
+                gameState.gameStarted = true;
+                
+                document.getElementById('setupArea').style.display = 'none';
+                document.getElementById('gameArea').style.display = 'block';
+                
+                updateGameDisplay();
+                addLog('Game started!');
+            }
         }
         
         function updateGameDisplay() {
@@ -353,19 +573,50 @@
             document.getElementById('currentTurn').textContent = `Current Turn: ${currentPlayerName}`;
             
             // Show controls only if it's your turn
-            if (currentPlayerName === gameState.currentPlayer) {
-                document.getElementById('gameControls').style.display = 'flex';
+            const isMyTurn = currentPlayerName === gameState.currentPlayer;
+            document.getElementById('gameControls').style.display = isMyTurn ? 'flex' : 'none';
+            
+            if (isMyTurn) {
                 updateAskOptions();
-            } else {
-                document.getElementById('gameControls').style.display = 'none';
             }
             
             // Update hand
             const hand = gameState.hands[gameState.currentPlayer] || [];
+            document.getElementById('handCount').textContent = hand.length;
             document.getElementById('playerHand').innerHTML = hand.sort().map(card => {
                 const isRed = card.includes('♥') || card.includes('♦');
                 return `<span class="card ${isRed ? 'red-card' : 'black-card'}">${card}</span>`;
             }).join('');
+            
+            // Update all players display
+            const team1Html = gameState.teams.team1.map(p => {
+                const cardCount = gameState.hands[p]?.length || 0;
+                const isCurrent = p === currentPlayerName;
+                return `<div style="padding: 5px; ${isCurrent ? 'background: #fef3c7;' : ''}">
+                    ${p}: ${cardCount} cards ${isCurrent ? '← Current' : ''}
+                </div>`;
+            }).join('');
+            
+            const team2Html = gameState.teams.team2.map(p => {
+                const cardCount = gameState.hands[p]?.length || 0;
+                const isCurrent = p === currentPlayerName;
+                return `<div style="padding: 5px; ${isCurrent ? 'background: #fef3c7;' : ''}">
+                    ${p}: ${cardCount} cards ${isCurrent ? '← Current' : ''}
+                </div>`;
+            }).join('');
+            
+            document.getElementById('allPlayersDisplay').innerHTML = `
+                <div class="team-display">
+                    <div class="team team1">
+                        <strong>Team 1</strong>
+                        ${team1Html}
+                    </div>
+                    <div class="team team2">
+                        <strong>Team 2</strong>
+                        ${team2Html}
+                    </div>
+                </div>
+            `;
             
             // Update scores
             document.getElementById('team1Score').textContent = gameState.claimedSuits.team1.length;
@@ -373,9 +624,9 @@
             
             // Update claimed suits
             document.getElementById('team1Suits').innerHTML = gameState.claimedSuits.team1
-                .map(s => `<span class="suit-badge">${s}</span>`).join('');
+                .map(s => `<span class="suit-badge">${s}</span>`).join('') || 'None yet';
             document.getElementById('team2Suits').innerHTML = gameState.claimedSuits.team2
-                .map(s => `<span class="suit-badge">${s}</span>`).join('');
+                .map(s => `<span class="suit-badge">${s}</span>`).join('') || 'None yet';
         }
         
         function updateAskOptions() {
@@ -417,21 +668,36 @@
                 return;
             }
             
-            const asker = gameState.players[gameState.currentTurn];
-            
-            if (gameState.hands[target].includes(card)) {
-                // Transfer card
-                gameState.hands[target] = gameState.hands[target].filter(c => c !== card);
-                gameState.hands[asker].push(card);
-                addLog(`${asker} asked ${target} for ${card} - YES!`);
-                // Same player continues
+            if (USE_MULTIPLAYER) {
+                sendMessage({
+                    type: 'askForCard',
+                    gameCode: gameState.code,
+                    target: target,
+                    card: card
+                });
             } else {
-                addLog(`${asker} asked ${target} for ${card} - NO`);
-                // Turn passes to target
-                gameState.currentTurn = gameState.players.indexOf(target);
+                // Local mode
+                const asker = gameState.players[gameState.currentTurn];
+                
+                if (gameState.hands[asker].includes(card)) {
+                    alert("You can't ask for a card you have!");
+                    return;
+                }
+                
+                if (gameState.hands[target].includes(card)) {
+                    // Transfer card
+                    gameState.hands[target] = gameState.hands[target].filter(c => c !== card);
+                    gameState.hands[asker].push(card);
+                    addLog(`${asker} asked ${target} for ${card} - YES!`);
+                    // Same player continues
+                } else {
+                    addLog(`${asker} asked ${target} for ${card} - NO`);
+                    // Turn passes to target
+                    gameState.currentTurn = gameState.players.indexOf(target);
+                }
+                
+                updateGameDisplay();
             }
-            
-            updateGameDisplay();
         }
         
         function startClaim() {
@@ -446,7 +712,27 @@
             );
             
             claimSelect.innerHTML = '<option value="">Select half suit</option>' + 
-                unclaimed.map(s => `<option value="${s}">${s}</option>`).join('');
+                unclaimed.map(s => `<option value="${s}">${s.replace('-', ' ')}</option>`).join('');
+        }
+        
+        function updateClaimForm() {
+            const suit = document.getElementById('claimSuit').value;
+            if (!suit) return;
+            
+            const cards = halfSuits[suit];
+            const assignDiv = document.getElementById('claimAssignments');
+            
+            assignDiv.innerHTML = `
+                <p><strong>Assign these cards:</strong> ${cards.join(', ')}</p>
+                ${gameState.players.map(p => `
+                    <div style="margin: 5px 0;">
+                        <label>${p}: 
+                            <input type="text" id="claim_${p}" placeholder="e.g., 2♥,3♥" 
+                                   style="width: 200px; padding: 5px;">
+                        </label>
+                    </div>
+                `).join('')}
+            `;
         }
         
         function cancelClaim() {
@@ -455,26 +741,59 @@
         }
         
         function submitClaim() {
-            // Simplified claim logic - in real game would validate assignments
             const suit = document.getElementById('claimSuit').value;
             if (!suit) { alert('Select a suit'); return; }
             
-            const claimer = gameState.players[gameState.currentTurn];
-            const team = gameState.teams.team1.includes(claimer) ? 'team1' : 'team2';
+            const claimData = {};
+            gameState.players.forEach(p => {
+                const input = document.getElementById(`claim_${p}`);
+                if (input && input.value) {
+                    claimData[p] = input.value.split(',').map(c => c.trim()).filter(c => c);
+                }
+            });
             
-            gameState.claimedSuits[team].push(suit);
-            addLog(`${claimer} claimed ${suit} for ${team}`);
-            
-            // Check for game end
-            const totalClaimed = gameState.claimedSuits.team1.length + gameState.claimedSuits.team2.length;
-            if (totalClaimed >= 8) {
-                endGame();
-                return;
+            if (USE_MULTIPLAYER) {
+                sendMessage({
+                    type: 'makeClaim',
+                    gameCode: gameState.code,
+                    suit: suit,
+                    assignments: claimData
+                });
+            } else {
+                // Simplified local claim
+                const claimer = gameState.players[gameState.currentTurn];
+                const team = gameState.teams.team1.includes(claimer) ? 'team1' : 'team2';
+                
+                // Basic validation - in real game would check actual card positions
+                const allCards = Object.values(claimData).flat();
+                const suitCards = halfSuits[suit];
+                
+                if (allCards.length === suitCards.length) {
+                    gameState.claimedSuits[team].push(suit);
+                    
+                    // Remove claimed cards from hands
+                    Object.entries(claimData).forEach(([player, cards]) => {
+                        if (gameState.hands[player]) {
+                            gameState.hands[player] = gameState.hands[player].filter(c => !cards.includes(c));
+                        }
+                    });
+                    
+                    addLog(`${claimer} successfully claimed ${suit} for ${team}`);
+                } else {
+                    addLog(`${claimer} failed to claim ${suit}`);
+                }
+                
+                // Check for game end
+                const totalClaimed = gameState.claimedSuits.team1.length + gameState.claimedSuits.team2.length;
+                if (totalClaimed >= 8) {
+                    endGame();
+                    return;
+                }
+                
+                gameState.currentTurn = (gameState.currentTurn + 1) % gameState.players.length;
+                cancelClaim();
+                updateGameDisplay();
             }
-            
-            gameState.currentTurn = (gameState.currentTurn + 1) % gameState.players.length;
-            cancelClaim();
-            updateGameDisplay();
         }
         
         function endGame() {
@@ -482,8 +801,14 @@
             const t2Score = gameState.claimedSuits.team2.length;
             const winner = t1Score > t2Score ? 'Team 1' : t2Score > t1Score ? 'Team 2' : 'Tie';
             
-            alert(`Game Over! ${winner} wins! (${t1Score} - ${t2Score})`);
-            addLog(`Game ended. ${winner} wins!`);
+            alert(`Game Over!\n${winner} wins!\n\nFinal Score:\nTeam 1: ${t1Score} suits\nTeam 2: ${t2Score} suits`);
+            addLog(`Game ended. ${winner} wins! (${t1Score} - ${t2Score})`);
+        }
+        
+        function handleGameEnd(data) {
+            const { winner, team1Score, team2Score } = data;
+            alert(`Game Over!\n${winner} wins!\n\nFinal Score:\nTeam 1: ${team1Score} suits\nTeam 2: ${team2Score} suits`);
+            addLog(`Game ended. ${winner} wins! (${team1Score} - ${team2Score})`);
         }
         
         function addLog(message) {
@@ -491,6 +816,23 @@
             const time = new Date().toLocaleTimeString();
             log.innerHTML = `<div class="log-entry">${time} - ${message}</div>` + log.innerHTML;
         }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Connect WebSocket if multiplayer is enabled
+            if (USE_MULTIPLAYER) {
+                connectWebSocket();
+            }
+            
+            // Enter key handlers
+            document.getElementById('playerName').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') createGame();
+            });
+            
+            document.getElementById('joinCode').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') joinGame();
+            });
+        });
     </script>
 </body>
 </html>
