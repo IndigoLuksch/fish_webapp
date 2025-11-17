@@ -1,0 +1,29 @@
+name = "fish"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Uncomment and configure if using KV storage for persistence
+# [[kv_namespaces]]
+# binding = "GAMES"
+# id = "your-kv-namespace-id"
+
+# Uncomment if using Durable Objects (recommended for real-time games)
+# [[durable_objects.bindings]]
+# name = "GAME_SESSIONS"
+# class_name = "GameSession"
+# script_name = "fish-game-multiplayer"
+
+# Custom domain (optional)
+# routes = [
+#   { pattern = "fish-game.yourdomain.com/*", zone_name = "yourdomain.com" }
+# ]
+
+[vars]
+ENVIRONMENT = "production"
+
+workers_dev = true
+
+[[rules]]
+type = "Text"
+globs = ["*.html"]
+fallthrough = true
